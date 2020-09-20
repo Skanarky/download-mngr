@@ -13,13 +13,11 @@ type Download struct {
 
 func main() {
 	startTime := time.Now()
-	// FIXME:
-	// TODO: pass URI, create package?
-	// TODO: create path dynamically 
+
 	download := Download{
-		OriginURI: "https://some-uri-will-gohere"
-		TargetPath    "some-path-will-go-here.jpg"
-		TotalSections 10
+		OriginURI:     "https://some-uri-will-gohere",
+		TargetPath:    "some-path-will-go-here.jpg",
+		TotalSections: 10,
 	}
 	fmt.Printf("Executing download manger\n")
 }
