@@ -17,8 +17,7 @@ func main() {
 	startTime := time.Now()
 
 	download := Download{
-		// OriginURI:     "https://drive.google.com/uc?id=16-ik4vC6ynIfQP3_DdziQH9KyjeIdVlM&authuser=0&export=download",
-		OriginURI:     "https://drive.google.com/file/d/16-ik4vC6ynIfQP3_DdziQH9KyjeIdVlM/view?usp=sharing",
+		OriginURI:     "https://www.pexels.com/photo/573271/download/",
 		TargetPath:    "the-pic.jpg",
 		TotalSections: 10,
 	}
