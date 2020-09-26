@@ -3,8 +3,10 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 )
@@ -32,7 +34,7 @@ func main() {
 }
 
 func (download Download) Run() error {
-	fmt.Println("Download started. Connecting.")
+	fmt.Println("Download started. Connecting...")
 
 	req, err := download.PrepareNewRequest("HEAD")
 	checkError(err)
@@ -45,7 +47,7 @@ func (download Download) Run() error {
 
 	size, err := strconv.Atoi(res.Header.Get("Content-Length"))
 	checkError(err)
-	// fmt.Printf("Size is %v bytes\n", size)
+	fmt.Printf("Size is %v bytes\n", size)
 
 	sections := make([][2]int, download.TotalSections)
 	oneSectSize := size / download.TotalSections
@@ -62,17 +64,29 @@ func (download Download) Run() error {
 			sections[i][1] = size - 1
 		}
 	}
-	// fmt.Println(sections)
 
 	for i, sect := range sections {
-		err := download.DownloadOneSection()
+		err := download.DownloadOneSection(i, sect)
 		checkError(err)
 	}
 
 	return nil
 }
 
-func (download Download) DownloadOneSection() error {
+func (download Download) DownloadOneSection(i int, sect [2]int) error {
+	req, err := download.PrepareNewRequest("GET")
+	checkError(err)
+
+	req.Header.Set("Range", fmt.Sprintf("bytes=%v-%v", sect[0], sect[1]))
+	res, err := http.DefaultClient.Do(req)
+	checkError(err)
+	fmt.Printf("Dowloaded %v bytes for section No. %v: %v\n", res.Header.Get("Content-Length"), i, sect)
+
+	bodyBytes, err := ioutil.ReadAll(res.Body)
+	checkError(err)
+
+	err = ioutil.WriteFile(fmt.Sprintf("sect-%v.tmp", i), bodyBytes, os.ModePerm)
+	checkError(err)
 	return nil
 }
 func (download Download) PrepareNewRequest(method string) (*http.Request, error) {
