@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 )
 
@@ -28,7 +29,9 @@ func main() {
 
 	err := download.Run()
 
-	checkError(err)
+	if err != nil {
+		log.Fatalf("Error while downloading: %s\n", err)
+	}
 
 	fmt.Printf("Download completed in: %v\n", time.Now().Sub(startTime).Seconds())
 }
@@ -37,16 +40,23 @@ func (download Download) Run() error {
 	fmt.Println("Download started. Connecting...")
 
 	req, err := download.PrepareNewRequest("HEAD")
-	checkError(err)
+	if err != nil {
+		return err
+	}
 
 	res, err := http.DefaultClient.Do(req)
-	checkError(err)
+	if err != nil {
+		return err
+	}
+
 	if res.StatusCode > 299 {
 		return errors.New(fmt.Sprintf("Download can not be finished. Status %v", res.StatusCode))
 	}
 
 	size, err := strconv.Atoi(res.Header.Get("Content-Length"))
-	checkError(err)
+	if err != nil {
+		return err
+	}
 	fmt.Printf("Size is %v bytes\n", size)
 
 	sections := make([][2]int, download.TotalSections)
@@ -65,9 +75,23 @@ func (download Download) Run() error {
 		}
 	}
 
+	var waitGr sync.WaitGroup
 	for i, sect := range sections {
-		err := download.DownloadOneSection(i, sect)
-		checkError(err)
+		waitGr.Add(1)
+		inI, inSect := i, sect
+		go func() {
+			defer waitGr.Done()
+			err := download.DownloadOneSection(inI, inSect)
+			if err != nil {
+				panic(err)
+			}
+		}()
+	}
+	waitGr.Wait()
+
+	err = download.MergeAllSectFiles(sections)
+	if err != nil {
+		return err
 	}
 
 	return nil
@@ -75,18 +99,27 @@ func (download Download) Run() error {
 
 func (download Download) DownloadOneSection(i int, sect [2]int) error {
 	req, err := download.PrepareNewRequest("GET")
-	checkError(err)
+	if err != nil {
+		return err
+	}
 
 	req.Header.Set("Range", fmt.Sprintf("bytes=%v-%v", sect[0], sect[1]))
 	res, err := http.DefaultClient.Do(req)
-	checkError(err)
+	if err != nil {
+		return err
+	}
 	fmt.Printf("Dowloaded %v bytes for section No. %v: %v\n", res.Header.Get("Content-Length"), i, sect)
 
 	bodyBytes, err := ioutil.ReadAll(res.Body)
-	checkError(err)
+	if err != nil {
+		return err
+	}
 
 	err = ioutil.WriteFile(fmt.Sprintf("sect-%v.tmp", i), bodyBytes, os.ModePerm)
-	checkError(err)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 func (download Download) PrepareNewRequest(method string) (*http.Request, error) {
@@ -95,13 +128,33 @@ func (download Download) PrepareNewRequest(method string) (*http.Request, error)
 		download.OriginURI,
 		nil,
 	)
-	checkError(err)
+	if err != nil {
+		return nil, err
+	}
 	req.Header.Set("User-Agent", "Simple Download Manager")
 	return req, nil
 }
-
-func checkError(err error) {
+func (download Download) MergeAllSectFiles(sections [][2]int) error {
+	theFile, err := os.OpenFile(download.TargetPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, os.ModePerm)
 	if err != nil {
-		log.Fatalf("Error while downloading: %s\n", err)
+		return err
 	}
+
+	defer theFile.Close()
+
+	for i := range sections {
+		tempBytes, err := ioutil.ReadFile(fmt.Sprintf("sect-%v.tmp", i))
+		if err != nil {
+			return err
+		}
+
+		writtenBytes, err := theFile.Write(tempBytes)
+		if err != nil {
+			return err
+		}
+
+		fmt.Printf("%v bytes were merged\n", writtenBytes)
+	}
+
+	return nil
 }
