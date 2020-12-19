@@ -1,2 +1,2 @@
 # download-mngr
-Download manager for different files using Go concurrency.
+Download manager - concurrency practice
